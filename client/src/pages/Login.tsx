@@ -9,36 +9,30 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
 export default function Login() {
+  // temporary stub: remove authentication forms until further notice
   const [, navigate] = useLocation();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-
-  const loginMutation = trpc.auth.login.useMutation({
-    onSuccess: () => {
-      toast.success("Logged in successfully!");
-      navigate("/dashboard");
-    },
-    onError: (err) => {
-      const msg = err.data?.message ?? err.message;
-      setError(msg);
-      toast.error(msg);
-    },
-  });
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    
-    const normalizedEmail = email.trim().toLowerCase();
-
-    if (!normalizedEmail || !password.trim()) {
-      setError("Please fill in all fields");
-      return;
-    }
-
-    loginMutation.mutate({ email: normalizedEmail, password });
-  };
+  
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader className="space-y-2">
+          <div className="flex items-center gap-2 mb-4">
+            <Shield className="w-6 h-6 text-primary" />
+            <span className="text-xl font-bold">Roguard</span>
+          </div>
+          <CardTitle>Login disabled</CardTitle>
+          <CardDescription>
+            Authentication has been temporarily removed. Click below to continue.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="text-center">
+          <Button onClick={() => navigate("/dashboard")} size="lg">
+            Go to dashboard
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -113,7 +107,8 @@ export default function Login() {
               type="button"
               onClick={async () => {
                 try {
-                  await trpc.auth.loginGuest.mutateAsync();
+                  const { user } = await trpc.auth.loginGuest.mutateAsync();
+                  utils.auth.me.setData(undefined, user as any);
                   navigate("/dashboard");
                 } catch (err: any) {
                   const msg = err.data?.message ?? err.message ?? "Unable to login as guest";

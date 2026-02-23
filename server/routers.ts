@@ -8,7 +8,6 @@ import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { notifyOwner } from "./_core/notification";
 import { invokeLLM } from "./_core/llm";
-import { realtimeDb, logAuthEvent } from "./firebase";
 import {
   banUser, createAlert, createExecutorLog, createHwidBan, createRemoteLoader,
   createScript, deleteRemoteLoader, deleteScript, getAllExecutorLogs, getAllUsers,
@@ -65,8 +64,6 @@ export const appRouter = router({
           // sdk.registerUser returns null when the email is already taken
           throw new TRPCError({ code: "BAD_REQUEST", message: "Email already registered" });
         }
-        // additional log
-        logAuthEvent({ action: "register", userId: user.id, email, success: true, ip: ctx.req.ip });
         return { success: true, userId: user.id };
       }),
     
@@ -87,8 +84,6 @@ export const appRouter = router({
 
         if (!user) throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid email or password" });
 
-        // log with IP for admin
-        logAuthEvent({ action: "login", email, success: !!user, ip: ctx.req.ip });
         
         const sessionToken = await sdk.createSessionToken(user.id, user.email, user.role);
         const cookieOptions = getSessionCookieOptions(ctx.req);

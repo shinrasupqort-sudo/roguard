@@ -1,337 +1,138 @@
-import { and, desc, eq, gte, sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/mysql2";
-import {
-  InsertUser, User, alerts, executorLogs, hwidBans,
-  remoteLoaders, scripts, userSettings, users,
-} from "../drizzle/schema";
-import { ENV } from "./_core/env";
+// In-memory replacement for the previous MySQL/Drizzle database.
+// All data lives in volatile JS objects; nothing is persisted, and
+// Firebase is no longer required.  This allows the application to
+// function without any external database at all.
 
-let _db: ReturnType<typeof drizzle> | null = null;
+export type User = {
+  id: number;
+  email: string;
+  passwordHash: string | null;
+  name?: string | null;
+  avatar?: string | null;
+  loginMethod: string;
+  hwid?: string | null;
+  role: "user" | "admin";
+  isBanned: boolean;
+  banReason?: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  lastSignedIn: Date;
+};
 
-export async function getDb() {
-  if (!_db) {
-    if (!process.env.DATABASE_URL) {
-      console.warn("[Database] no DATABASE_URL configured");
-    } else {
-      console.log("[Database] connecting to", process.env.DATABASE_URL);
-      try {
-        _db = drizzle(process.env.DATABASE_URL);
-      } catch (error) {
-        console.warn("[Database] Failed to connect:", error);
-        _db = null;
-      }
-    }
-  }
-  return _db;
-}
+let nextUserId = 1;
+const users: User[] = [];
 
-// ─── Users ─────────────────────────────────────────────────────────────────
 export async function createUser(
   email: string,
   passwordHash: string,
   name?: string,
   role: "user" | "admin" = "user"
 ): Promise<User | undefined> {
-  const db = await getDb();
-  if (!db) {
-    throw new Error("Database not connected");
+  const norm = email.toLowerCase();
+  if (users.find((u) => u.email === norm && u.passwordHash)) {
+    return undefined; // already exists with a password
   }
-  const result = await db.insert(users).values({
-    email: email.toLowerCase(),
+  const user: User = {
+    id: nextUserId++,
+    email: norm,
     passwordHash,
-    name,
+    name: name ?? null,
+    avatar: null,
     loginMethod: "email",
-    lastSignedIn: new Date(),
+    hwid: null,
     role,
-  });
-  const user: any = result[0];
-  return await getUserById(user.insertId ?? user.lastInsertRowid);
+    isBanned: false,
+    banReason: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    lastSignedIn: new Date(),
+  };
+  users.push(user);
+  return user;
 }
 
 export async function getUserByEmail(email: string): Promise<User | undefined> {
-  const db = await getDb();
-  if (!db) {
-    // If the database isn't available, raise an error rather than silently
-    // returning `undefined`. This makes it easier for higher-level logic to
-    // distinguish between "user not found" and "internal/database issue".
-    throw new Error("Database not connected");
-  }
-  const result = await db
-    .select()
-    .from(users)
-    .where(eq(users.email, email.toLowerCase()))
-    .limit(1);
-  return result[0];
+  const norm = email.toLowerCase();
+  return users.find((u) => u.email === norm);
 }
 
 export async function getUserById(id: number): Promise<User | undefined> {
-  const db = await getDb();
-  if (!db) {
-    throw new Error("Database not connected");
-  }
-  const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
-  return result[0];
+  return users.find((u) => u.id === id);
 }
 
 export async function getAllUsers(limit = 50, offset = 0) {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(users).orderBy(desc(users.createdAt)).limit(limit).offset(offset);
+  return users.slice(offset, offset + limit);
 }
 
 export async function updateUserHwid(userId: number, hwid: string) {
-  const db = await getDb();
-  if (!db) return;
-  await db.update(users).set({ hwid, updatedAt: new Date() }).where(eq(users.id, userId));
+  const u = await getUserById(userId);
+  if (u) {
+    u.hwid = hwid;
+    u.updatedAt = new Date();
+  }
 }
 
 export async function updateUserLastSignedIn(userId: number) {
-  const db = await getDb();
-  if (!db) return;
-  await db.update(users).set({ lastSignedIn: new Date(), updatedAt: new Date() }).where(eq(users.id, userId));
+  const u = await getUserById(userId);
+  if (u) {
+    u.lastSignedIn = new Date();
+    u.updatedAt = new Date();
+  }
 }
 
 export async function banUser(userId: number, reason: string) {
-  const db = await getDb();
-  if (!db) return;
-  await db.update(users).set({ isBanned: true, banReason: reason, updatedAt: new Date() }).where(eq(users.id, userId));
-}
-
-export async function updateUserRole(userId: number, role: "user" | "admin") {
-  const db = await getDb();
-  if (!db) return;
-  await db.update(users).set({ role, updatedAt: new Date() }).where(eq(users.id, userId));
+  const u = await getUserById(userId);
+  if (u) {
+    u.isBanned = true;
+    u.banReason = reason;
+    u.updatedAt = new Date();
+  }
 }
 
 export async function unbanUser(userId: number) {
-  const db = await getDb();
-  if (!db) return;
-  await db.update(users).set({ isBanned: false, banReason: null, updatedAt: new Date() }).where(eq(users.id, userId));
+  const u = await getUserById(userId);
+  if (u) {
+    u.isBanned = false;
+    u.banReason = null;
+    u.updatedAt = new Date();
+  }
 }
 
-// ─── HWID Bans ─────────────────────────────────────────────────────────────
-export async function createHwidBan(hwid: string, reason: string, bannedBy: number, userId?: number) {
-  const db = await getDb();
-  if (!db) return;
-  await db.insert(hwidBans).values({ hwid, reason, bannedBy, userId, isActive: true });
+export async function updateUserRole(userId: number, role: "user" | "admin") {
+  const u = await getUserById(userId);
+  if (u) {
+    u.role = role;
+    u.updatedAt = new Date();
+  }
 }
 
-export async function removeHwidBan(id: number) {
-  const db = await getDb();
-  if (!db) return;
-  await db.update(hwidBans).set({ isActive: false, updatedAt: new Date() }).where(eq(hwidBans.id, id));
-}
-
-export async function isHwidBanned(hwid: string): Promise<boolean> {
-  const db = await getDb();
-  if (!db) return false;
-  const result = await db.select().from(hwidBans).where(and(eq(hwidBans.hwid, hwid), eq(hwidBans.isActive, true))).limit(1);
-  return result.length > 0;
-}
-
-export async function getHwidBans(limit = 50, offset = 0) {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(hwidBans).where(eq(hwidBans.isActive, true)).orderBy(desc(hwidBans.createdAt)).limit(limit).offset(offset);
-}
-
-// ─── Scripts ───────────────────────────────────────────────────────────────
-export async function createScript(data: {
-  userId: number; name: string; description?: string;
-  originalKey?: string; originalUrl?: string; fileType: "lua" | "txt"; obfuscationOptions?: object;
-}) {
-  const db = await getDb();
-  if (!db) return null;
-  const result = await db.insert(scripts).values({ ...data, executionCount: 0, isActive: true });
-  return result;
-}
-
-export async function updateScriptObfuscated(scriptId: number, obfuscatedKey: string, obfuscatedUrl: string) {
-  const db = await getDb();
-  if (!db) return;
-  await db.update(scripts).set({ obfuscatedKey, obfuscatedUrl, updatedAt: new Date() }).where(eq(scripts.id, scriptId));
-}
-
-export async function getUserScripts(userId: number) {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(scripts).where(and(eq(scripts.userId, userId), eq(scripts.isActive, true))).orderBy(desc(scripts.createdAt));
-}
-
-export async function getScriptById(id: number) {
-  const db = await getDb();
-  if (!db) return undefined;
-  const result = await db.select().from(scripts).where(eq(scripts.id, id)).limit(1);
-  return result[0];
-}
-
-export async function deleteScript(id: number) {
-  const db = await getDb();
-  if (!db) return;
-  await db.update(scripts).set({ isActive: false, updatedAt: new Date() }).where(eq(scripts.id, id));
-}
-
-export async function incrementScriptExecution(scriptId: number) {
-  const db = await getDb();
-  if (!db) return;
-  await db.update(scripts).set({ executionCount: sql`${scripts.executionCount} + 1`, updatedAt: new Date() }).where(eq(scripts.id, scriptId));
-}
-
-export async function getTopScripts(userId: number, limit = 5) {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(scripts).where(and(eq(scripts.userId, userId), eq(scripts.isActive, true))).orderBy(desc(scripts.executionCount)).limit(limit);
-}
-
-// ─── Executor Logs ─────────────────────────────────────────────────────────
-export async function createExecutorLog(data: {
-  userId?: number; scriptId?: number; hwid?: string; scriptName?: string;
-  executorName?: string; gameId?: string; gameName?: string; ipAddress?: string;
-  status: "success" | "error" | "blocked" | "bypass_attempt"; errorMessage?: string; metadata?: object;
-}) {
-  const db = await getDb();
-  if (!db) return;
-  await db.insert(executorLogs).values(data);
-}
-
-export async function getExecutorLogs(userId: number, limit = 100, offset = 0) {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(executorLogs).where(eq(executorLogs.userId, userId)).orderBy(desc(executorLogs.createdAt)).limit(limit).offset(offset);
-}
-
-export async function getAllExecutorLogs(limit = 100, offset = 0) {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(executorLogs).orderBy(desc(executorLogs.createdAt)).limit(limit).offset(offset);
-}
-
-export async function getExecutorLogStats(userId: number) {
-  const db = await getDb();
-  if (!db) return { total: 0, success: 0, errors: 0, blocked: 0, bypass: 0 };
-  const logs = await db.select().from(executorLogs).where(eq(executorLogs.userId, userId));
-  return {
-    total: logs.length,
-    success: logs.filter((l) => l.status === "success").length,
-    errors: logs.filter((l) => l.status === "error").length,
-    blocked: logs.filter((l) => l.status === "blocked").length,
-    bypass: logs.filter((l) => l.status === "bypass_attempt").length,
-  };
-}
-
-export async function getRecentLogs(userId: number, hours = 24) {
-  const db = await getDb();
-  if (!db) return [];
-  const since = new Date(Date.now() - hours * 60 * 60 * 1000);
-  return db.select().from(executorLogs).where(and(eq(executorLogs.userId, userId), gte(executorLogs.createdAt, since))).orderBy(desc(executorLogs.createdAt));
-}
-
-// ─── Remote Loaders ────────────────────────────────────────────────────────
-export async function createRemoteLoader(data: {
-  userId: number; name: string; accessKey: string;
-  scriptId?: number; scriptKey?: string; scriptUrl?: string; requireHwid?: boolean;
-}) {
-  const db = await getDb();
-  if (!db) return null;
-  await db.insert(remoteLoaders).values({ ...data, isActive: true, executionCount: 0 });
-}
-
-export async function getUserRemoteLoaders(userId: number) {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(remoteLoaders).where(and(eq(remoteLoaders.userId, userId), eq(remoteLoaders.isActive, true))).orderBy(desc(remoteLoaders.createdAt));
-}
-
-export async function getRemoteLoaderByKey(accessKey: string) {
-  const db = await getDb();
-  if (!db) return undefined;
-  const result = await db.select().from(remoteLoaders).where(and(eq(remoteLoaders.accessKey, accessKey), eq(remoteLoaders.isActive, true))).limit(1);
-  return result[0];
-}
-
-export async function updateRemoteLoader(id: number, data: Partial<{ name: string; scriptId: number; scriptKey: string; scriptUrl: string; requireHwid: boolean; isActive: boolean }>) {
-  const db = await getDb();
-  if (!db) return;
-  await db.update(remoteLoaders).set({ ...data, updatedAt: new Date() }).where(eq(remoteLoaders.id, id));
-}
-
-export async function deleteRemoteLoader(id: number) {
-  const db = await getDb();
-  if (!db) return;
-  await db.update(remoteLoaders).set({ isActive: false, updatedAt: new Date() }).where(eq(remoteLoaders.id, id));
-}
-
-export async function incrementRemoteLoaderExecution(id: number) {
-  const db = await getDb();
-  if (!db) return;
-  await db.update(remoteLoaders).set({ executionCount: sql`${remoteLoaders.executionCount} + 1`, lastExecutedAt: new Date(), updatedAt: new Date() }).where(eq(remoteLoaders.id, id));
-}
-
-// ─── User Settings ─────────────────────────────────────────────────────────
-export async function getUserSettings(userId: number) {
-  const db = await getDb();
-  if (!db) return null;
-  const result = await db.select().from(userSettings).where(eq(userSettings.userId, userId)).limit(1);
-  if (result[0]) return result[0];
-  await db.insert(userSettings).values({ userId });
-  const fresh = await db.select().from(userSettings).where(eq(userSettings.userId, userId)).limit(1);
-  return fresh[0] ?? null;
-}
-
-export async function updateUserSettings(userId: number, data: Partial<Omit<typeof userSettings.$inferInsert, "id" | "userId" | "createdAt" | "updatedAt">>) {
-  const db = await getDb();
-  if (!db) return;
-  await db.insert(userSettings).values({ userId, ...data }).onDuplicateKeyUpdate({ set: { ...data, updatedAt: new Date() } });
-}
-
-// ─── Alerts ────────────────────────────────────────────────────────────────
-export async function createAlert(data: { userId: number; type: "bypass_attempt" | "new_ban" | "suspicious_activity" | "info"; title: string; message: string; metadata?: object }) {
-  const db = await getDb();
-  if (!db) return;
-  await db.insert(alerts).values({ ...data, isRead: false });
-}
-
-export async function getUserAlerts(userId: number, limit = 20) {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(alerts).where(eq(alerts.userId, userId)).orderBy(desc(alerts.createdAt)).limit(limit);
-}
-
-export async function markAlertRead(id: number) {
-  const db = await getDb();
-  if (!db) return;
-  await db.update(alerts).set({ isRead: true }).where(eq(alerts.id, id));
-}
-
-export async function markAllAlertsRead(userId: number) {
-  const db = await getDb();
-  if (!db) return;
-  await db.update(alerts).set({ isRead: true }).where(eq(alerts.userId, userId));
-}
-
-export async function getUnreadAlertCount(userId: number): Promise<number> {
-  const db = await getDb();
-  if (!db) return 0;
-  const result = await db.select().from(alerts).where(and(eq(alerts.userId, userId), eq(alerts.isRead, false)));
-  return result.length;
-}
-
-// ─── Dashboard Stats ───────────────────────────────────────────────────────
-export async function getDashboardStats(userId: number) {
-  const db = await getDb();
-  if (!db) return null;
-  const [userScripts, loaders, logStats, recentLogs, topScripts] = await Promise.all([
-    getUserScripts(userId),
-    getUserRemoteLoaders(userId),
-    getExecutorLogStats(userId),
-    getRecentLogs(userId, 24),
-    getTopScripts(userId, 5),
-  ]);
-  return {
-    totalScripts: userScripts.length,
-    totalLoaders: loaders.length,
-    logStats,
-    recentActivity: recentLogs.slice(0, 10),
-    topScripts,
-  };
-}
+// stubs for the remaining exports - simply no-ops or empty results
+export async function createAlert() {}
+export async function createExecutorLog() {}
+export async function createHwidBan() {}
+export async function createRemoteLoader() {}
+export async function createScript() {}
+export async function deleteRemoteLoader() {}
+export async function deleteScript() {}
+export async function getAllExecutorLogs() { return []; }
+export async function getDashboardStats() { return {}; }
+export async function getExecutorLogs() { return []; }
+export async function getExecutorLogStats() { return { total: 0, success: 0, errors: 0, blocked: 0, bypass: 0 }; }
+export async function getHwidBans() { return []; }
+export async function getRemoteLoaderByKey() { return null; }
+export async function getScriptById() { return null; }
+export async function getTopScripts() { return []; }
+export async function getUnreadAlertCount() { return 0; }
+export async function getUserAlerts() { return []; }
+export async function getUserRemoteLoaders() { return []; }
+export async function getUserScripts() { return []; }
+export async function getUserSettings() { return null; }
+export async function isHwidBanned() { return false; }
+export async function markAlertRead() {}
+export async function markAllAlertsRead() {}
+export async function removeHwidBan() {}
+export async function updateRemoteLoader() {}
+export async function updateScriptObfuscated() {}
+export async function updateUserSettings() {}
+export async function incrementRemoteLoaderExecution() {}
+export async function incrementScriptExecution() {}

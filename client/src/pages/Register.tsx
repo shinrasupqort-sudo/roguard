@@ -9,52 +9,30 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
 export default function Register() {
+  // registration disabled temporarily, use dashboard button below
   const [, navigate] = useLocation();
-  const [email, setEmail] = useState("");
-  const [name, setName] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [error, setError] = useState("");
 
-  const registerMutation = trpc.auth.register.useMutation({
-    onSuccess: () => {
-      toast.success("Account created successfully! Redirecting to login...");
-      setTimeout(() => navigate("/auth/login"), 1000);
-    },
-    onError: (err) => {
-      const msg = err.data?.message ?? err.message;
-      setError(msg);
-      toast.error(msg);
-    },
-  });
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    
-    const normalizedEmail = email.trim().toLowerCase();
-
-    if (!normalizedEmail || !password.trim()) {
-      setError("Please fill in all required fields");
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setError("Passwords do not match");
-      return;
-    }
-
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters long");
-      return;
-    }
-
-    registerMutation.mutate({
-      email: normalizedEmail,
-      password,
-      name: name.trim() || undefined,
-    });
-  };
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader className="space-y-2">
+          <div className="flex items-center gap-2 mb-4">
+            <Shield className="w-6 h-6 text-primary" />
+            <span className="text-xl font-bold">Roguard</span>
+          </div>
+          <CardTitle>Registration disabled</CardTitle>
+          <CardDescription>
+            Account creation has been temporarily removed. Click below to continue.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="text-center">
+          <Button onClick={() => navigate("/dashboard")} size="lg">
+            Go to dashboard
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">

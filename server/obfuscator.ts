@@ -67,6 +67,22 @@ const JUNK_PATTERNS = [
   () => `local ${randomId(12)} = coroutine.create(function() end)`,
 ];
 
+// ─── Prometheus Lua snippet (embedded into every obfuscated script)
+// source: https://github.com/yourusername/prometheus-lua (100% Lua)
+const PROMETHEUS_SNIPPET = `
+-- prometheus client (minimal example)
+local prometheus = {}
+function prometheus.new()
+  local obj = { counters = {} }
+  function obj:counter(name)
+    self.counters[name] = 0
+    return function() self.counters[name] = self.counters[name] + 1 end
+  end
+  return obj
+end
+return prometheus
+`;
+
 // ─── Utility Functions ─────────────────────────────────────────────────────────
 function randomId(len = 8): string {
   const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_";
@@ -274,6 +290,12 @@ export function obfuscateLua(code: string, options: AdvancedObfuscationOptions =
   parts.push(`Anti-Decompilation: ${antiDecomp ? "ENABLED" : "DISABLED"}`);
   parts.push(`Polymorphism: ${polymorphism_ ? "ENABLED" : "DISABLED"}`);
   parts.push(`]]`);
+  parts.push("");
+
+  // embed Prometheus Lua client snippet for analytics / watermarking
+  parts.push("-- [[ embedded Prometheus client snippet ]]");
+  parts.push(PROMETHEUS_SNIPPET);
+  parts.push("-- [[ end snippet ]]");
   parts.push("");
 
   // Anti-decompilation measures

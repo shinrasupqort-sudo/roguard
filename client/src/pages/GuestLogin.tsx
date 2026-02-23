@@ -7,9 +7,12 @@ import { toast } from "sonner";
 export default function GuestLogin() {
   const [, navigate] = useLocation();
   const [error, setError] = useState<string | null>(null);
+  const utils = trpc.useContext();
 
   const guestLoginMutation = trpc.auth.loginGuest.useMutation({
-    onSuccess: () => {
+    onSuccess: (data) => {
+      // prime cache so dashboard auth check succeeds immediately
+      utils.auth.me.setData(undefined, data.user as any);
       navigate("/dashboard");
     },
     onError: (err) => {

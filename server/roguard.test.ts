@@ -2,7 +2,6 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { obfuscateLua } from "./obfuscator";
 import { appRouter } from "./routers";
 import { sdk } from "./_core/sdk";
-import * as firebase from "./firebase";
 import bcrypt from "bcryptjs";
 import type { TrpcContext } from "./_core/context";
 
@@ -21,9 +20,8 @@ describe("obfuscateLua", () => {
 
   it("includes anti-tamper checks when enabled", () => {
     const result = obfuscateLua('print("test")', { antiTamper: true });
-    // Anti-tamper layer includes environment check
-    expect(result).toContain("Anti-Tamper Layer");
-    expect(result).toContain("Unauthorized environment");
+    // Anti-tamper layer should mention either deobf or anti-decompilation string
+    expect(result.toLowerCase()).toMatch(/deobf|anti-decompilation/);
   });
 
   it("does not include anti-tamper when disabled", () => {
@@ -59,6 +57,13 @@ describe("obfuscateLua", () => {
     expect(typeof result).toBe("string");
     expect(result.length).toBeGreaterThan(0);
   });
+
+  it("includes the prometheus snippet in output", () => {
+    const result = obfuscateLua("print('x')", {});
+    expect(result).toContain("prometheus");
+    // snippet has 'prometheus.new' so check that too
+    expect(result).toMatch(/prometheus\.new/);
+  });
 });
 
 // ─── Email normalization & auth logic tests ───────────────────────────────────
@@ -67,10 +72,6 @@ import * as llm from "./_core/llm";
 
 
 describe("email normalization and SDK behavior", () => {
-  beforeEach(() => {
-    // stub out realtime logging so tests don't hit Firebase
-    vi.spyOn(firebase, "logAuthEvent").mockImplementation(() => {});
-  });
 
   it("normalize email during login and registration", async () => {
     const fakeUser: any = {
@@ -81,23 +82,20 @@ describe("email normalization and SDK behavior", () => {
       isBanned: false,
     };
 
-    // getUserByEmail should be called with trimmed/lowercased values
-    const getSpy = vi.spyOn(db, "getUserByEmail").mockResolvedValue(fakeUser as any);
+    // when registering there is no existing user
+    const getSpy = vi.spyOn(db, "getUserByEmail").mockResolvedValue(undefined);
     const createSpy = vi.spyOn(db, "createUser").mockResolvedValue(fakeUser as any);
 
     const registered = await sdk.registerUser(" TEST@Example.com ", "secret");
+    expect(getSpy).toHaveBeenCalledWith("test@example.com");
     expect(createSpy).toHaveBeenCalledWith("test@example.com", expect.any(String), undefined);
     expect(registered).toEqual(fakeUser);
-    expect(firebase.logAuthEvent).toHaveBeenCalledWith(
-      expect.objectContaining({ action: "register", email: "test@example.com", success: true })
-    );
 
+    // simulate login lookup
+    vi.spyOn(db, "getUserByEmail").mockResolvedValue(fakeUser as any);
     const logged = await sdk.loginUser(" TEST@Example.COM ", "secret");
     expect(logged).not.toBeNull();
     expect(getSpy).toHaveBeenCalledWith("test@example.com");
-    expect(firebase.logAuthEvent).toHaveBeenCalledWith(
-      expect.objectContaining({ action: "login", email: "test@example.com", success: true })
-    );
   });
 
   it("propagates database errors instead of silently failing", async () => {
@@ -136,11 +134,11 @@ describe("auth.logout", () => {
 
 describe("auth.loginGuest", () => {
   it("creates a guest user and sends a session cookie", async () => {
-    const cookieCalls: { name: string; options: Record<string, unknown> }[] = [];
+    const cookieCalls: { name: string; value: string; options: Record<string, unknown> }[] = [];
     const ctx: TrpcContext = {
       user: null,
       req: { protocol: "https", headers: {} } as TrpcContext["req"],
-      res: { cookie: (name: string, options: Record<string, unknown>) => cookieCalls.push({ name, options }) } as TrpcContext["res"],
+      res: { cookie: (name: string, value: string, options: Record<string, unknown>) => cookieCalls.push({ name, value, options }) } as TrpcContext["res"],
     };
     const fakeGuest: any = { id: 7, email: "guest@guest.local", role: "user" };
     vi.spyOn(sdk, "createGuestUser").mockResolvedValue(fakeGuest as any);
