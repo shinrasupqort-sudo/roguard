@@ -6,6 +6,7 @@ import { SignJWT, jwtVerify } from "jose";
 import type { User } from "../../drizzle/schema";
 import * as db from "../db";
 import { logAuthEvent } from "../firebase"; // write auth logs to firebase realtime database
+import { isAdminEmail } from "../adminUsers";
 
 
 const isNonEmptyString = (value: unknown): value is string =>
@@ -124,24 +125,26 @@ class SDKServer {
     name?: string
   ): Promise<User | null> {
     const normalized = this.normalizeEmail(email);
+    console.log(`[SDK] registerUser called for email=${normalized}`);
 
     const existingUser = await db.getUserByEmail(normalized);
     if (existingUser && existingUser.passwordHash) {
+      console.log(`[SDK] registration blocked, user already exists:`, existingUser);
       return null; // User already exists with a password
     }
 
     const passwordHash = await this.hashPassword(password);
-    const user = await db.createUser(normalized, passwordHash, name);
+    // decide role depending on whether this email is in the admin list
+    const isAdmin = isAdminEmail(normalized);
+    const user = await db.createUser(normalized, passwordHash, name, isAdmin ? "admin" : "user");
     if (!user) {
-      // if createUser failed due to a database issue we want to propagate an
-      // error rather than silently return null (which would be misinterpreted
-      // by callers as "already registered").
       logAuthEvent({ action: "register", email: normalized, success: false });
+      console.warn("[SDK] createUser returned null");
       throw new Error("Failed to create user (database error)");
     }
 
-    // log to realtime database
     logAuthEvent({ action: "register", userId: user.id, email: normalized, success: true });
+    console.log(`[SDK] new user created:`, user);
     return user;
   }
 
@@ -150,24 +153,29 @@ class SDKServer {
    */
   async loginUser(email: string, password: string): Promise<User | null> {
     const normalized = this.normalizeEmail(email);
+    console.log(`[SDK] loginUser attempt for email=${normalized}`);
     const user = await db.getUserByEmail(normalized);
     if (!user || !user.passwordHash) {
+      console.log(`[SDK] login failed, user not found or no password:`, user);
       return null; // User not found or password not set
     }
 
     const isPasswordValid = await this.verifyPassword(password, user.passwordHash);
     if (!isPasswordValid) {
       logAuthEvent({ action: "login", email: normalized, success: false });
+      console.log("[SDK] login failed, bad password");
       return null; // Invalid password
     }
 
     if (user.isBanned) {
       logAuthEvent({ action: "login", userId: user.id, email: normalized, success: false, reason: "banned" });
+      console.log("[SDK] login failed, user is banned");
       return null; // User is banned
     }
 
     await db.updateUserLastSignedIn(user.id);
     logAuthEvent({ action: "login", userId: user.id, email: normalized, success: true });
+    console.log("[SDK] login success for", user.id);
     return user;
   }
 

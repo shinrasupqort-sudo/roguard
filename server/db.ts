@@ -9,15 +9,29 @@ import { ENV } from "./_core/env";
 let _db: ReturnType<typeof drizzle> | null = null;
 
 export async function getDb() {
-  if (!_db && process.env.DATABASE_URL) {
-    try { _db = drizzle(process.env.DATABASE_URL); }
-    catch (error) { console.warn("[Database] Failed to connect:", error); _db = null; }
+  if (!_db) {
+    if (!process.env.DATABASE_URL) {
+      console.warn("[Database] no DATABASE_URL configured");
+    } else {
+      console.log("[Database] connecting to", process.env.DATABASE_URL);
+      try {
+        _db = drizzle(process.env.DATABASE_URL);
+      } catch (error) {
+        console.warn("[Database] Failed to connect:", error);
+        _db = null;
+      }
+    }
   }
   return _db;
 }
 
 // ─── Users ─────────────────────────────────────────────────────────────────
-export async function createUser(email: string, passwordHash: string, name?: string): Promise<User | undefined> {
+export async function createUser(
+  email: string,
+  passwordHash: string,
+  name?: string,
+  role: "user" | "admin" = "user"
+): Promise<User | undefined> {
   const db = await getDb();
   if (!db) {
     throw new Error("Database not connected");
@@ -28,7 +42,7 @@ export async function createUser(email: string, passwordHash: string, name?: str
     name,
     loginMethod: "email",
     lastSignedIn: new Date(),
-    role: "user",
+    role,
   });
   const user: any = result[0];
   return await getUserById(user.insertId ?? user.lastInsertRowid);
@@ -81,6 +95,12 @@ export async function banUser(userId: number, reason: string) {
   const db = await getDb();
   if (!db) return;
   await db.update(users).set({ isBanned: true, banReason: reason, updatedAt: new Date() }).where(eq(users.id, userId));
+}
+
+export async function updateUserRole(userId: number, role: "user" | "admin") {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users).set({ role, updatedAt: new Date() }).where(eq(users.id, userId));
 }
 
 export async function unbanUser(userId: number) {

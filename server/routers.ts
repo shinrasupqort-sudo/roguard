@@ -8,6 +8,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { notifyOwner } from "./_core/notification";
 import { invokeLLM } from "./_core/llm";
+import { realtimeDb, logAuthEvent } from "./firebase";
 import {
   banUser, createAlert, createExecutorLog, createHwidBan, createRemoteLoader,
   createScript, deleteRemoteLoader, deleteScript, getAllExecutorLogs, getAllUsers,
@@ -17,6 +18,7 @@ import {
   isHwidBanned, markAlertRead, markAllAlertsRead, removeHwidBan, unbanUser,
   updateRemoteLoader, updateScriptObfuscated, updateUserSettings,
   incrementRemoteLoaderExecution, incrementScriptExecution,
+  updateUserRole,
 } from "./db";
 import { obfuscateLua, validateLuaScript } from "./obfuscator";
 import { storagePut } from "./storage";
@@ -33,6 +35,13 @@ export const appRouter = router({
 
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
+    // debug-only endpoints used during development/diagnosis
+    debugUsers: publicProcedure.query(async () => {
+      if (process.env.NODE_ENV === "production") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Not allowed in production" });
+      }
+      return await getAllUsers();
+    }),
     
     register: publicProcedure
       .input(z.object({
@@ -40,7 +49,7 @@ export const appRouter = router({
         password: z.string().min(6).max(256),
         name: z.string().max(255).optional(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         // always normalize on the server as well in case the client forgets to trim
         const email = input.email.trim().toLowerCase();
         let user;
@@ -56,6 +65,8 @@ export const appRouter = router({
           // sdk.registerUser returns null when the email is already taken
           throw new TRPCError({ code: "BAD_REQUEST", message: "Email already registered" });
         }
+        // additional log
+        logAuthEvent({ action: "register", userId: user.id, email, success: true, ip: ctx.req.ip });
         return { success: true, userId: user.id };
       }),
     
@@ -75,6 +86,9 @@ export const appRouter = router({
         }
 
         if (!user) throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid email or password" });
+
+        // log with IP for admin
+        logAuthEvent({ action: "login", email, success: !!user, ip: ctx.req.ip });
         
         const sessionToken = await sdk.createSessionToken(user.id, user.email, user.role);
         const cookieOptions = getSessionCookieOptions(ctx.req);
@@ -85,6 +99,7 @@ export const appRouter = router({
     
     loginGuest: publicProcedure
       .mutation(async ({ ctx }) => {
+        console.log("[Router] loginGuest called from", ctx.req.headers.host);
         let user;
         try {
           user = await sdk.createGuestUser();
@@ -104,6 +119,35 @@ export const appRouter = router({
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
       return { success: true } as const;
+    }),
+  }),
+
+  admin: router({
+    listUsers: adminProcedure.query(async () => {
+      return await getAllUsers();
+    }),
+    banUser: adminProcedure
+      .input(z.object({ id: z.number(), reason: z.string().optional() }))
+      .mutation(async ({ input }) => {
+        await banUser(input.id, input.reason || "");
+        return { success: true };
+      }),
+    unbanUser: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await unbanUser(input.id);
+        return { success: true };
+      }),
+    setUserRole: adminProcedure
+      .input(z.object({ id: z.number(), role: z.enum(["user", "admin"]) }))
+      .mutation(async ({ input }) => {
+        await updateUserRole(input.id, input.role);
+        return { success: true };
+      }),
+    getAuthLogs: adminProcedure.query(async () => {
+      const snap = await realtimeDb.ref("authLogs").orderByChild("timestamp").limitToLast(200).once("value");
+      const val = snap.val() || {};
+      return Object.values(val);
     }),
   }),
 
@@ -348,12 +392,6 @@ export const appRouter = router({
     topScripts: protectedProcedure.query(async ({ ctx }) => getTopScripts(ctx.user.id, 5)),
   }),
 
-  admin: router({
-    users: adminProcedure.query(async () => getAllUsers(100, 0)),
-    banUser: adminProcedure.input(z.object({ userId: z.number(), reason: z.string() })).mutation(async ({ input }) => { await banUser(input.userId, input.reason); return { success: true }; }),
-    unbanUser: adminProcedure.input(z.object({ userId: z.number() })).mutation(async ({ input }) => { await unbanUser(input.userId); return { success: true }; }),
-    allLogs: adminProcedure.input(z.object({ limit: z.number().optional() })).query(async ({ input }) => getAllExecutorLogs(input.limit ?? 200)),
-  }),
 });
 
 export type AppRouter = typeof appRouter;

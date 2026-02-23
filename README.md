@@ -195,6 +195,19 @@ Full API documentation available at `http://localhost:5173/api`
 4. JWT session token created
 5. Logged in and redirect to `/dashboard`
 
+> **Debugging tips:**
+> * When troubleshooting registration/login/guest flows the server now
+>   prints useful diagnostics on startup and during each attempt (see
+>   `server/db.ts` and `server/_core/sdk.ts`).  Check the process logs to
+>   confirm which `DATABASE_URL` is being used and what emails are seen.
+> * A development-only RPC (`auth.debugUsers`) returns all rows from the
+>   `users` table.  You can call `trpc.auth.debugUsers.fetch()` from the
+>   browser console to verify which database the server is touching.
+> * If you ever think "there are no records in my database" but the app
+>   behaves otherwise, it usually means the app is connected to a **different**
+>   database than the one you're inspecting.  Confirm the connection string
+>   printed in the logs and compare it to the one your DB client is using.
+
 ### Session Verification
 1. On each request, session cookie checked
 2. JWT token verified with secret key
@@ -325,6 +338,14 @@ Current test status: **14 tests passing**
 ### Database Connection Error
 ```bash
 # Verify DATABASE_URL format:
+
+### Admin Panel
+An administration console is available at `/admin`.  No navigation link is
+shown — you must type the path directly.  Only accounts whose `role` is
+`admin` may access it.  New registrations will automatically receive the
+`admin` role if the email address is listed in
+`server/adminUsers.ts` (see that file for details).
+
 mysql://user:password@host:port/database
 
 # Test connection:

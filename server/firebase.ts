@@ -29,8 +29,9 @@ function loadServiceAccount(): admin.ServiceAccount | undefined {
 // and none of the code actually hits Firebase (we spy on logAuthEvent),
 // so skip initialization entirely to avoid esbuild errors about the
 // credential object being undefined.
+// initialize only when not running tests; vitest sets NODE_ENV=test
 if (process.env.NODE_ENV === "test") {
-  // no-op
+  // don't touch admin SDK, we will stub the exports below
 } else if (!admin.apps.length) {
   const service = loadServiceAccount();
   if (service) {
@@ -47,7 +48,19 @@ if (process.env.NODE_ENV === "test") {
   }
 }
 
-export const realtimeDb = admin.database();
+// export a (possibly stubbed) database reference
+export const realtimeDb: admin.database.Database =
+  admin.apps.length > 0
+    ? admin.database()
+    : // stub object for tests
+      ({
+        ref: () => ({
+          push: () => ({
+            set: () => Promise.resolve(),
+          }),
+          orderByChild: () => ({ limitToLast: () => ({ once: () => ({ val: () => null }) }) }),
+        }),
+      } as any);
 
 /**
  * Write an authentication event to the realtime database.  If the
