@@ -22,8 +22,9 @@ export default function Register() {
       setTimeout(() => navigate("/auth/login"), 1000);
     },
     onError: (err) => {
-      setError(err.message);
-      toast.error(err.message);
+      const msg = err.data?.message ?? err.message;
+      setError(msg);
+      toast.error(msg);
     },
   });
 
@@ -31,7 +32,9 @@ export default function Register() {
     e.preventDefault();
     setError("");
     
-    if (!email.trim() || !password.trim()) {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!normalizedEmail || !password.trim()) {
       setError("Please fill in all required fields");
       return;
     }
@@ -47,7 +50,7 @@ export default function Register() {
     }
 
     registerMutation.mutate({
-      email: email.toLowerCase(),
+      email: normalizedEmail,
       password,
       name: name.trim() || undefined,
     });

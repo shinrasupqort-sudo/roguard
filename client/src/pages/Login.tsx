@@ -20,8 +20,9 @@ export default function Login() {
       navigate("/dashboard");
     },
     onError: (err) => {
-      setError(err.message);
-      toast.error(err.message);
+      const msg = err.data?.message ?? err.message;
+      setError(msg);
+      toast.error(msg);
     },
   });
 
@@ -29,12 +30,14 @@ export default function Login() {
     e.preventDefault();
     setError("");
     
-    if (!email.trim() || !password.trim()) {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!normalizedEmail || !password.trim()) {
       setError("Please fill in all fields");
       return;
     }
 
-    loginMutation.mutate({ email: email.toLowerCase(), password });
+    loginMutation.mutate({ email: normalizedEmail, password });
   };
 
   return (

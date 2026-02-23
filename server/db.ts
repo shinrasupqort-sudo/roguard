@@ -19,7 +19,9 @@ export async function getDb() {
 // ─── Users ─────────────────────────────────────────────────────────────────
 export async function createUser(email: string, passwordHash: string, name?: string): Promise<User | undefined> {
   const db = await getDb();
-  if (!db) return undefined;
+  if (!db) {
+    throw new Error("Database not connected");
+  }
   const result = await db.insert(users).values({
     email: email.toLowerCase(),
     passwordHash,
@@ -34,14 +36,25 @@ export async function createUser(email: string, passwordHash: string, name?: str
 
 export async function getUserByEmail(email: string): Promise<User | undefined> {
   const db = await getDb();
-  if (!db) return undefined;
-  const result = await db.select().from(users).where(eq(users.email, email.toLowerCase())).limit(1);
+  if (!db) {
+    // If the database isn't available, raise an error rather than silently
+    // returning `undefined`. This makes it easier for higher-level logic to
+    // distinguish between "user not found" and "internal/database issue".
+    throw new Error("Database not connected");
+  }
+  const result = await db
+    .select()
+    .from(users)
+    .where(eq(users.email, email.toLowerCase()))
+    .limit(1);
   return result[0];
 }
 
 export async function getUserById(id: number): Promise<User | undefined> {
   const db = await getDb();
-  if (!db) return undefined;
+  if (!db) {
+    throw new Error("Database not connected");
+  }
   const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
   return result[0];
 }

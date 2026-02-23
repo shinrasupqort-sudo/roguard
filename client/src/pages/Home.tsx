@@ -2,7 +2,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl, getRegisterUrl } from "@/const";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Activity, Code2, Globe, Shield, ShieldBan, ShieldCheck, Zap, Lock, ChevronRight, Star, LayoutDashboard } from "lucide-react";
+import { Activity, Code2, Globe, Shield, ShieldBan, ShieldCheck, Zap, Lock, ChevronRight, Star, LayoutDashboard, MessageSquare } from "lucide-react";
 import { Link } from "wouter";
 
 const features = [
@@ -12,6 +12,7 @@ const features = [
   { icon: ShieldBan, title: "HWID Ban System", desc: "Ban specific hardware IDs from executing your scripts. Automatic alerts when banned HWIDs attempt access.", badge: "Instant" },
   { icon: ShieldCheck, title: "Dashboard Analytics", desc: "Visual analytics showing most-used scripts, execution trends, error rates and security events.", badge: "Analytics" },
   { icon: Zap, title: "Instant Alerts", desc: "Get notified immediately when bypass attempts, suspicious activity or new HWID bans are detected.", badge: "Alerts" },
+  { icon: MessageSquare, title: "AI Chat", desc: "Talk to an integrated AI assistant directly from the dashboard.", badge: "GPT-Style" },
 ];
 
 const techFeatures = ["3-Layer String Encryption","ConstantArray Encryption (2 Layers)","Anti-Tamper Checks","ENV Detection (Roblox)","Variable Renaming","Control Flow Obfuscation","HWID Ban System","S3 Secure Storage","Real-time Logs","Bypass Detection","Email & Password Auth","Free Forever"];

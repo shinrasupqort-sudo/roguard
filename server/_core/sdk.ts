@@ -107,25 +107,44 @@ class SDKServer {
   /**
    * Register a new user with email and password
    */
+  /**
+   * Normalize emails consistently on the server side.  Trims whitespace
+   * and lowercases the value so that comparisons and storage behave
+   * predictably.
+   */
+  private normalizeEmail(email: string): string {
+    return email.trim().toLowerCase();
+  }
+
   async registerUser(
     email: string,
     password: string,
     name?: string
   ): Promise<User | null> {
-    const existingUser = await db.getUserByEmail(email);
+    const normalized = this.normalizeEmail(email);
+
+    const existingUser = await db.getUserByEmail(normalized);
     if (existingUser && existingUser.passwordHash) {
-      return null; // User already exists
+      return null; // User already exists with a password
     }
 
     const passwordHash = await this.hashPassword(password);
-    return db.createUser(email, passwordHash, name);
+    const user = await db.createUser(normalized, passwordHash, name);
+    if (!user) {
+      // if createUser failed due to a database issue we want to propagate an
+      // error rather than silently return null (which would be misinterpreted
+      // by callers as "already registered").
+      throw new Error("Failed to create user (database error)");
+    }
+    return user;
   }
 
   /**
    * Login user with email and password
    */
   async loginUser(email: string, password: string): Promise<User | null> {
-    const user = await db.getUserByEmail(email);
+    const normalized = this.normalizeEmail(email);
+    const user = await db.getUserByEmail(normalized);
     if (!user || !user.passwordHash) {
       return null; // User not found or password not set
     }
@@ -147,8 +166,14 @@ class SDKServer {
    * Create a guest user
    */
   async createGuestUser(): Promise<User | null> {
-    const guestEmail = `guest_${Date.now()}_${Math.random().toString(36).substring(7)}@guest.local`;
-    return db.createUser(guestEmail, "", `Guest ${Date.now()}`);
+    const guestEmail = `guest_${Date.now()}_${Math.random()
+      .toString(36)
+      .substring(7)}@guest.local`;
+    const user = await db.createUser(guestEmail, "", `Guest ${Date.now()}`);
+    if (!user) {
+      throw new Error("Failed to create guest user (database error)");
+    }
+    return user;
   }
 }
 

@@ -5,8 +5,9 @@ Advanced Lua script obfuscator for Roblox with email/password authentication, us
 ## Features
 
 ### 🔐 Authentication
-- **Email/Password Authentication** - Secure bcrypt-hashed passwords
-- **Guest Login** - Quick access without registration
+- **Email/Password Authentication** - Secure bcrypt-hashed passwords (email inputs are now normalized to avoid case/whitespace bugs)
+- **Guest Login** - Quick access without registration (retry logic added on failures)
+- **AI Chat Interface** - Talk to an integrated AI assistant from the dashboard
 - **JWT Sessions** - Secure token-based authentication with 1-year expiration
 - **Protected Routes** - Dashboard and advanced features require login
 

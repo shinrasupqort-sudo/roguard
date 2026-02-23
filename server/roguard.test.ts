@@ -1,6 +1,8 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { obfuscateLua } from "./obfuscator";
 import { appRouter } from "./routers";
+import { sdk } from "./_core/sdk";
+import bcrypt from "bcryptjs";
 import type { TrpcContext } from "./_core/context";
 
 // ─── Obfuscator Tests ─────────────────────────────────────────────────────────
@@ -58,6 +60,41 @@ describe("obfuscateLua", () => {
   });
 });
 
+// ─── Email normalization & auth logic tests ───────────────────────────────────
+import * as db from "./db";
+import * as llm from "./_core/llm";
+
+
+describe("email normalization and SDK behavior", () => {
+  it("normalize email during login and registration", async () => {
+    const fakeUser: any = {
+      id: 42,
+      email: "test@example.com",
+      passwordHash: await bcrypt.hash("secret", 10),
+      role: "user",
+      isBanned: false,
+    };
+
+    // getUserByEmail should be called with trimmed/lowercased values
+    const getSpy = vi.spyOn(db, "getUserByEmail").mockResolvedValue(fakeUser as any);
+    const createSpy = vi.spyOn(db, "createUser").mockResolvedValue(fakeUser as any);
+
+    const registered = await sdk.registerUser(" TEST@Example.com ", "secret");
+    expect(createSpy).toHaveBeenCalledWith("test@example.com", expect.any(String), undefined);
+    expect(registered).toEqual(fakeUser);
+
+    const logged = await sdk.loginUser(" TEST@Example.COM ", "secret");
+    expect(logged).not.toBeNull();
+    expect(getSpy).toHaveBeenCalledWith("test@example.com");
+  });
+
+  it("propagates database errors instead of silently failing", async () => {
+    vi.spyOn(db, "getUserByEmail").mockRejectedValue(new Error("no db"));
+    await expect(sdk.registerUser("a@b.com", "pw")).rejects.toThrow("no db");
+    await expect(sdk.loginUser("a@b.com", "pw")).rejects.toThrow("no db");
+  });
+});
+
 // ─── Auth Router Tests ────────────────────────────────────────────────────────
 describe("auth.logout", () => {
   it("clears session cookie and returns success", async () => {
@@ -72,6 +109,57 @@ describe("auth.logout", () => {
     expect(result.success).toBe(true);
     expect(clearedCookies).toHaveLength(1);
     expect(clearedCookies[0]?.options).toMatchObject({ maxAge: -1, httpOnly: true });
+  });
+});
+
+// ─── AI Chat Tests ─────────────────────────────────────────────────────────
+describe("ai.chat", () => {
+  it("forwards messages to the LLM and returns response", async () => {
+    const fakeResponse: any = {
+      choices: [
+        { index: 0, message: { role: "assistant", content: "hello" } },
+      ],
+    };
+    const llmSpy = vi.spyOn(llm, "invokeLLM").mockResolvedValue(fakeResponse);
+
+    const ctx: TrpcContext = {
+      user: { id: 2, openId: "u2", email: "u2@example.com", name: "U2", loginMethod: "email", role: "user", createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date() },
+      req: { protocol: "https", headers: {} } as any,
+      res: {} as any,
+    };
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.ai.chat({ messages: [{ role: "user", content: "hi" }] });
+    expect(llmSpy).toHaveBeenCalledWith({ messages: [{ role: "user", content: "hi" }] });
+    expect(result.choices[0].message.content).toBe("hello");
+  });
+});
+
+// router-level auth normalization tests
+
+describe("auth router email normalization", () => {
+  it("passes trimmed lowercase email to SDK on register", async () => {
+    const callerCtx: TrpcContext = {
+      user: null,
+      req: { protocol: "https", headers: {} } as any,
+      res: { cookie: () => {} } as any,
+    };
+    const caller = appRouter.createCaller(callerCtx);
+    const spy = vi.spyOn(sdk, "registerUser").mockResolvedValue({ id: 3, email: "user@x.com", role: "user" } as any);
+    await caller.auth.register({ email: " USER@X.COM ", password: "pw123" });
+    expect(spy).toHaveBeenCalledWith("user@x.com", "pw123", undefined);
+  });
+
+  it("passes trimmed lowercase email to SDK on login", async () => {
+    const callerCtx: TrpcContext = {
+      user: null,
+      req: { protocol: "https", headers: {} } as any,
+      res: { cookie: () => {} } as any,
+    };
+    const caller = appRouter.createCaller(callerCtx);
+    const spy = vi.spyOn(sdk, "loginUser").mockResolvedValue({ id: 4, email: "a@b.com", role: "user" } as any);
+    const result = await caller.auth.login({ email: " A@B.COM ", password: "secret" });
+    expect(spy).toHaveBeenCalledWith("a@b.com", "secret");
+    expect(result.success).toBe(true);
   });
 });
 

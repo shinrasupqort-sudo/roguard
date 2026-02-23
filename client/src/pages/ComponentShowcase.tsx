@@ -171,6 +171,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { toast as sonnerToast } from "sonner";
+import { trpc } from "@/lib/trpc";
 import { AIChatBox, type Message } from "@/components/AIChatBox";
 
 export default function ComponentsShowcase() {
@@ -209,21 +210,26 @@ export default function ComponentsShowcase() {
     }
   };
 
+  const chatMutation = trpc.ai.chat.useMutation({
+    onSuccess: (response) => {
+      const content = response.choices?.[0]?.message?.content;
+      if (content) {
+        setChatMessages((prev) => [...prev, { role: "assistant", content }]);
+      }
+      setIsChatLoading(false);
+    },
+    onError: (err) => {
+      console.error("AI chat error", err);
+      setIsChatLoading(false);
+      sonnerToast.error("AI service error");
+    },
+  });
+
   const handleChatSend = (content: string) => {
-    // Add user message
     const newMessages: Message[] = [...chatMessages, { role: "user", content }];
     setChatMessages(newMessages);
-
-    // Simulate AI response with delay
     setIsChatLoading(true);
-    setTimeout(() => {
-      const aiResponse: Message = {
-        role: "assistant",
-        content: `This is a **demo response**. In a real app, you would call a tRPC mutation here:\n\n\`\`\`typescript\nconst chatMutation = trpc.ai.chat.useMutation({\n  onSuccess: (response) => {\n    setChatMessages(prev => [...prev, {\n      role: "assistant",\n      content: response.choices[0].message.content\n    }]);\n  }\n});\n\nchatMutation.mutate({ messages: newMessages });\n\`\`\`\n\nYour message was: "${content}"`,
-      };
-      setChatMessages([...newMessages, aiResponse]);
-      setIsChatLoading(false);
-    }, 1500);
+    chatMutation.mutate({ messages: newMessages });
   };
 
   return (

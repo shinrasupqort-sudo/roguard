@@ -7,6 +7,7 @@ import { sdk } from "./_core/sdk";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { notifyOwner } from "./_core/notification";
+import { invokeLLM } from "./_core/llm";
 import {
   banUser, createAlert, createExecutorLog, createHwidBan, createRemoteLoader,
   createScript, deleteRemoteLoader, deleteScript, getAllExecutorLogs, getAllUsers,
@@ -40,8 +41,21 @@ export const appRouter = router({
         name: z.string().max(255).optional(),
       }))
       .mutation(async ({ input }) => {
-        const user = await sdk.registerUser(input.email, input.password, input.name);
-        if (!user) throw new TRPCError({ code: "BAD_REQUEST", message: "Email already registered" });
+        // always normalize on the server as well in case the client forgets to trim
+        const email = input.email.trim().toLowerCase();
+        let user;
+        try {
+          user = await sdk.registerUser(email, input.password, input.name);
+        } catch (err) {
+          // if it's our custom error from SDK, propagate as internal
+          console.error("registerUser failure", err);
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Registration failed" });
+        }
+
+        if (!user) {
+          // sdk.registerUser returns null when the email is already taken
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Email already registered" });
+        }
         return { success: true, userId: user.id };
       }),
     
@@ -51,7 +65,15 @@ export const appRouter = router({
         password: z.string().min(1).max(256),
       }))
       .mutation(async ({ ctx, input }) => {
-        const user = await sdk.loginUser(input.email, input.password);
+        const email = input.email.trim().toLowerCase();
+        let user;
+        try {
+          user = await sdk.loginUser(email, input.password);
+        } catch (err) {
+          console.error("loginUser failure", err);
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Login failed" });
+        }
+
         if (!user) throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid email or password" });
         
         const sessionToken = await sdk.createSessionToken(user.id, user.email, user.role);
@@ -63,9 +85,14 @@ export const appRouter = router({
     
     loginGuest: publicProcedure
       .mutation(async ({ ctx }) => {
-        const user = await sdk.createGuestUser();
-        if (!user) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to create guest user" });
-        
+        let user;
+        try {
+          user = await sdk.createGuestUser();
+        } catch (err) {
+          console.error("createGuestUser error", err);
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to create guest user" });
+        }
+
         const sessionToken = await sdk.createSessionToken(user.id, user.email, user.role);
         const cookieOptions = getSessionCookieOptions(ctx.req);
         ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
@@ -154,6 +181,17 @@ export const appRouter = router({
       }),
   }),
 
+  ai: router({
+    chat: protectedProcedure
+      .input(z.object({
+        messages: z.array(z.object({ role: z.string(), content: z.string() })),
+      }))
+      .mutation(async ({ input }) => {
+        // forward the conversation to the LLM service
+        const response = await invokeLLM({ messages: input.messages });
+        return response;
+      }),
+  }),
   hwidBans: router({
     list: protectedProcedure.query(async () => getHwidBans()),
 
