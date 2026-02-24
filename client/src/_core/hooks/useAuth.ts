@@ -3,6 +3,9 @@ import { trpc } from "@/lib/trpc";
 import { TRPCClientError } from "@trpc/client";
 import { useCallback, useEffect, useMemo } from "react";
 
+// toggle authentication bypass during development
+const SKIP_AUTH = true;
+
 type UseAuthOptions = {
   redirectOnUnauthenticated?: boolean;
   redirectPath?: string;
@@ -16,6 +19,7 @@ export function useAuth(options?: UseAuthOptions) {
   const meQuery = trpc.auth.me.useQuery(undefined, {
     retry: false,
     refetchOnWindowFocus: false,
+    enabled: !SKIP_AUTH, // skip actual network call when auth is bypassed
   });
 
   const logoutMutation = trpc.auth.logout.useMutation({
@@ -42,6 +46,26 @@ export function useAuth(options?: UseAuthOptions) {
   }, [logoutMutation, utils]);
 
   const state = useMemo(() => {
+    if (SKIP_AUTH) {
+      // return a dummy authenticated user to satisfy pages
+      const fakeUser = {
+        id: 0,
+        email: "guest@roguard.local",
+        name: "Guest",
+        loginMethod: "guest",
+        role: "admin",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        lastSignedIn: new Date(),
+        passwordHash: null,
+      } as any;
+      return {
+        user: fakeUser,
+        loading: false,
+        error: null,
+        isAuthenticated: true,
+      };
+    }
     return {
       user: meQuery.data ?? null,
       loading: meQuery.isLoading || logoutMutation.isPending,
@@ -57,13 +81,14 @@ export function useAuth(options?: UseAuthOptions) {
   ]);
 
   useEffect(() => {
+    if (SKIP_AUTH) return; // never redirect when skipping auth
     if (!redirectOnUnauthenticated) return;
     if (meQuery.isLoading || logoutMutation.isPending) return;
     if (state.user) return;
     if (typeof window === "undefined") return;
     if (window.location.pathname === redirectPath) return;
 
-    window.location.href = redirectPath
+    window.location.href = redirectPath;
   }, [
     redirectOnUnauthenticated,
     redirectPath,
