@@ -48,24 +48,50 @@ export async function setupVite(app: Express, server: Server) {
 }
 
 export function serveStatic(app: Express) {
-  // When the server is bundled with esbuild, import.meta.dirname points to /dist,
-  // so we use process.cwd() which points to the app root in production (Render, etc).
-  const distPath = path.join(process.cwd(), "dist", "public");
-  
-  if (!fs.existsSync(distPath)) {
-    console.error(
-      `Could not find the build directory: ${distPath}. Make sure to run "pnpm build" first.`
-    );
+  // Determine the build directory path.
+  // In production, the bundled file is at dist/index.js, so we resolve from there.
+  let distPath: string;
+
+  try {
+    // import.meta.url in ESM gives us file:/// URL of the current module
+    // When bundled by esbuild to dist/index.js, import.meta.url = file:///path/to/dist/index.js
+    const fileUrl = new URL(import.meta.url);
+    const bundledFile = fileUrl.pathname;
+    const bundledDir = path.dirname(bundledFile);
+    
+    // bundledDir is /path/to/dist, so dist/public is in bundledDir/public
+    distPath = path.join(bundledDir, "public");
+    console.log(`[serveStatic] Resolved from import.meta.url: ${distPath}`);
+  } catch (e) {
+    // Fallback for any issues: use process.cwd()
+    console.log(`[serveStatic] Fallback to process.cwd()`);
+    distPath = path.resolve(process.cwd(), "dist", "public");
   }
 
-  app.use(express.static(distPath));
+  const indexHtmlPath = path.join(distPath, "index.html");
 
-  // SPA fallback: serve index.html for any route that doesn't match a static file
+  console.log(`[serveStatic] distPath: ${distPath}`);
+  console.log(`[serveStatic] indexHtmlPath: ${indexHtmlPath}`);
+  console.log(`[serveStatic] distPath exists: ${fs.existsSync(distPath)}`);
+  console.log(`[serveStatic] index.html exists: ${fs.existsSync(indexHtmlPath)}`);
+
+  if (!fs.existsSync(distPath)) {
+    console.error(`[ERROR] Build directory not found: ${distPath}`);
+    console.error(`[ERROR] Current working directory: ${process.cwd()}`);
+    console.error(`[ERROR] Run 'pnpm build' to generate the frontend build.`);
+  }
+
+  // Serve static files (JS, CSS, images, etc.)
+  app.use(express.static(distPath, { maxAge: "1d" }));
+
+  // SPA fallback: serve index.html for all other routes
   app.use("*", (_req, res) => {
-    const indexPath = path.join(distPath, "index.html");
-    if (!fs.existsSync(indexPath)) {
-      return res.status(404).send("index.html not found");
+    if (fs.existsSync(indexHtmlPath)) {
+      console.log(`[serveStatic] Serving index.html for SPA route`);
+      res.sendFile(indexHtmlPath);
+    } else {
+      console.error(`[ERROR] index.html not found at ${indexHtmlPath}`);
+      res.status(404).send("Frontend build not found. Please run 'pnpm build'.");
     }
-    res.sendFile(indexPath);
   });
 }

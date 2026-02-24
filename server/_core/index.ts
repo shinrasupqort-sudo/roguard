@@ -11,6 +11,9 @@ import { serveStatic, setupVite } from "./vite";
 // to another free port because the platform will not detect the service.
 
 async function startServer() {
+  console.log(`[startup] NODE_ENV: ${process.env.NODE_ENV}`);
+  console.log(`[startup] process.cwd(): ${process.cwd()}`);
+  
   const app = express();
   const server = createServer(app);
   // Configure body parser with larger size limit for file uploads
@@ -27,15 +30,17 @@ async function startServer() {
   );
   // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
+    console.log(`[startup] Setting up Vite dev server...`);
     await setupVite(app, server);
   } else {
+    console.log(`[startup] Setting up static file serving...`);
     serveStatic(app);
   }
 
   const port = parseInt(process.env.PORT || "3000", 10);
 
   server.listen(port, () => {
-    console.log(`Server running on http://localhost:${port}/`);
+    console.log(`[startup] Server running on http://localhost:${port}/`);
   });
 }
 
