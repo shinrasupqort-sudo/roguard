@@ -7,6 +7,7 @@ import { Link, useLocation } from "wouter";
 import { Shield, AlertCircle } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 export default function Register() {
   const [, navigate] = useLocation();
