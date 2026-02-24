@@ -18,9 +18,11 @@ import {
   updateRemoteLoader, updateScriptObfuscated, updateUserSettings,
   incrementRemoteLoaderExecution, incrementScriptExecution,
   updateUserRole,
+  createInvite, consumeInvite, listInvites,
 } from "./db";
 import { obfuscateLua, validateLuaScript } from "./obfuscator";
 import { storagePut } from "./storage";
+import { realtimeDb } from "./firebase";
 
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
   if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
@@ -92,6 +94,15 @@ export const appRouter = router({
         return { success: true, user };
       }),
     
+    // invite validation endpoint
+    consumeInvite: publicProcedure
+      .input(z.string().min(16).max(16))
+      .mutation(async ({ input }) => {
+        const ok = await consumeInvite(input);
+        if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid or used invite" });
+        return { success: true };
+      }),
+
     loginGuest: publicProcedure
       .mutation(async ({ ctx }) => {
         console.log("[Router] loginGuest called from", ctx.req.headers.host);
@@ -143,6 +154,20 @@ export const appRouter = router({
       const snap = await realtimeDb.ref("authLogs").orderByChild("timestamp").limitToLast(200).once("value");
       const val = snap.val() || {};
       return Object.values(val);
+    }),
+    // invite management (only the designated gmail may access)
+    generateInvite: protectedProcedure.mutation(async ({ ctx }) => {
+      if (ctx.user.email !== "francyertj@gmail.com") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Not allowed" });
+      }
+      const code = await createInvite();
+      return { code };
+    }),
+    listInvites: protectedProcedure.query(async ({ ctx }) => {
+      if (ctx.user.email !== "francyertj@gmail.com") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Not allowed" });
+      }
+      return await listInvites();
     }),
   }),
 

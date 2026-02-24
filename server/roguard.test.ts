@@ -64,6 +64,42 @@ describe("obfuscateLua", () => {
     // snippet has 'prometheus.new' so check that too
     expect(result).toMatch(/prometheus\.new/);
   });
+
+  it("can generate and consume invite codes via db", async () => {
+    const code = await db.createInvite();
+    expect(code).toHaveLength(16);
+    expect(await db.consumeInvite(code)).toBe(true);
+    // cannot consume twice
+    expect(await db.consumeInvite(code)).toBe(false);
+  });
+
+  it("auth.consumeInvite procedure works", async () => {
+    const code = await db.createInvite();
+    const caller = appRouter.createCaller({ user: null, req: {} as any, res: {} as any });
+    const res = await caller.auth.consumeInvite(code);
+    expect(res).toEqual({ success: true });
+    await expect(caller.auth.consumeInvite(code)).rejects.toThrow();
+  });
+
+  it("admin.generateInvite/listInvites restricted to designated gmail regardless of role", async () => {
+    const nonAllowedCaller = appRouter.createCaller({
+      user: { id: 1, email: "foo@bar.com", role: "user", isBanned: false },
+      req: {} as any,
+      res: {} as any,
+    });
+    await expect(nonAllowedCaller.admin.generateInvite()).rejects.toThrow();
+    await expect(nonAllowedCaller.admin.listInvites()).rejects.toThrow();
+
+    const allowedCaller = appRouter.createCaller({
+      user: { id: 2, email: "francyertj@gmail.com", role: "user", isBanned: false },
+      req: {} as any,
+      res: {} as any,
+    });
+    const { code } = await allowedCaller.admin.generateInvite();
+    expect(code).toHaveLength(16);
+    const invites = await allowedCaller.admin.listInvites();
+    expect(invites.some((i: any) => i.code === code)).toBe(true);
+  });
 });
 
 // ─── Email normalization & auth logic tests ───────────────────────────────────

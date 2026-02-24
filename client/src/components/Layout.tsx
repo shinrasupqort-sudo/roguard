@@ -13,6 +13,7 @@ import { Badge } from "./ui/badge";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/chat", label: "Chat", icon: MessageSquare },
   { href: "/scripts", label: "Scripts", icon: FileCode2 },
   { href: "/obfuscator", label: "Obfuscator", icon: Code2 },
   { href: "/remote-loader", label: "Remote Loader", icon: Globe },
@@ -22,8 +23,8 @@ const navItems = [
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
-  // authentication gate is currently disabled; set SKIP_AUTH to false
-  const SKIP_AUTH = true;
+  // toggle authentication gate; disable to bypass for development
+  const SKIP_AUTH = false;
   const { user, loading, isAuthenticated, logout } = useAuth();
   const [location] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);

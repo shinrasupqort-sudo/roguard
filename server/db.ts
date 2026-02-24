@@ -106,6 +106,36 @@ export async function updateUserRole(userId: number, role: "user" | "admin") {
   }
 }
 
+// invite codes (one‑time use)
+export type Invite = { code: string; used: boolean; createdAt: Date };
+const invites: Invite[] = [];
+
+export async function createInvite(): string {
+  // 16 alphanumeric characters
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  let code;
+  do {
+    code = "";
+    for (let i = 0; i < 16; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+  } while (invites.find(i => i.code === code));
+
+  invites.push({ code, used: false, createdAt: new Date() });
+  return code;
+}
+
+export async function consumeInvite(code: string): boolean {
+  const inv = invites.find(i => i.code === code);
+  if (!inv || inv.used) return false;
+  inv.used = true;
+  return true;
+}
+
+export async function listInvites() {
+  return invites;
+}
+
 // stubs for the remaining exports - simply no-ops or empty results
 export async function createAlert() {}
 export async function createExecutorLog() {}

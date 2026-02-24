@@ -5,21 +5,34 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 export default function Admin() {
-  // redirect unauthenticated users; once we have user we still check role
+  // redirect unauthenticated users; once we have user we still check role/identity
   const { user, loading } = useAuth({ redirectOnUnauthenticated: true });
   const [isAuthorized, setIsAuthorized] = useState(false);
 
-  const usersQuery = trpc.admin.listUsers.useQuery(undefined, { enabled: isAuthorized });
-  const logsQuery = trpc.admin.getAuthLogs.useQuery(undefined, { enabled: isAuthorized });
+  const isAdmin = user?.role === "admin";
+  const canManageInvites = user?.email === "francyertj@gmail.com";
+
+  const usersQuery = trpc.admin.listUsers.useQuery(undefined, { enabled: isAdmin });
+  const logsQuery = trpc.admin.getAuthLogs.useQuery(undefined, { enabled: isAdmin });
+  const invitesQuery = trpc.admin.listInvites.useQuery(undefined, { enabled: canManageInvites });
+  const inviteMutation = trpc.admin.generateInvite.useMutation({
+    onSuccess: (data) => {
+      toast.success("Invite code generated");
+      invitesQuery.refetch();
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to generate invite");
+    },
+  });
 
   useEffect(() => {
     if (!loading && user) {
-      setIsAuthorized(user.role === "admin");
-      if (user.role !== "admin") {
+      setIsAuthorized(isAdmin || canManageInvites);
+      if (!isAdmin && !canManageInvites) {
         toast.error("Access denied");
       }
     }
-  }, [loading, user]);
+  }, [loading, user, isAdmin, canManageInvites]);
 
   if (loading || usersQuery.isLoading || logsQuery.isLoading) {
     return (
@@ -37,9 +50,10 @@ export default function Admin() {
     <div className="p-4">
       <h1 className="text-2xl font-bold mb-4">Admin Panel</h1>
 
-      <section className="mb-8">
-        <h2 className="text-xl font-semibold mb-2">Users</h2>
-        <table className="w-full table-auto border-collapse">
+      {isAdmin && (
+        <section className="mb-8">
+          <h2 className="text-xl font-semibold mb-2">Users</h2>
+          <table className="w-full table-auto border-collapse">
           <thead>
             <tr className="bg-gray-100">
               <th className="p-2 text-left">ID</th>
@@ -123,16 +137,53 @@ export default function Admin() {
         </table>
       </section>
 
-      <section>
-        <h2 className="text-xl font-semibold mb-2">Auth logs (recent)</h2>
-        <ul className="space-y-1 text-sm">
-          {logsQuery.data?.map((log: any, idx: number) => (
-            <li key={idx} className="border-b py-1">
-              [{new Date(log.timestamp).toLocaleString()}] {log.action} {log.email || ""} {log.ip ? `ip=${log.ip}` : ""} {log.success === false ? "(failed)" : ""}
-            </li>
-          ))}
-        </ul>
-      </section>
+      {canManageInvites && (
+        <section className="mb-8">
+          <h2 className="text-xl font-semibold mb-2">Invite Codes</h2>
+          <div className="mb-4">
+            <button
+              onClick={() => inviteMutation.mutate()}
+              className="px-4 py-2 bg-primary text-white rounded"
+              disabled={inviteMutation.isLoading}
+            >
+              {inviteMutation.isLoading ? "Generating..." : "Generate Invite"}
+            </button>
+          </div>
+          {invitesQuery.data && invitesQuery.data.length > 0 && (
+            <table className="w-full table-auto border-collapse">
+              <thead>
+                <tr className="bg-gray-100">
+                  <th className="p-2 text-left">Code</th>
+                  <th className="p-2 text-left">Used</th>
+                  <th className="p-2 text-left">Created</th>
+                </tr>
+              </thead>
+              <tbody>
+                {invitesQuery.data.map((inv: any) => (
+                  <tr key={inv.code} className="border-t">
+                    <td className="p-2 font-mono text-sm">{inv.code}</td>
+                    <td className="p-2">{inv.used ? "yes" : "no"}</td>
+                    <td className="p-2">{new Date(inv.createdAt).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </section>
+      )}
+
+      {isAdmin && (
+        <section>
+          <h2 className="text-xl font-semibold mb-2">Auth logs (recent)</h2>
+          <ul className="space-y-1 text-sm">
+            {logsQuery.data?.map((log: any, idx: number) => (
+              <li key={idx} className="border-b py-1">
+                [{new Date(log.timestamp).toLocaleString()}] {log.action} {log.email || ""} {log.ip ? `ip=${log.ip}` : ""} {log.success === false ? "(failed)" : ""}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </div>
   );
 }

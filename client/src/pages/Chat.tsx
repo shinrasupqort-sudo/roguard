@@ -13,6 +13,8 @@ export default function Chat() {
   ]);
   const [isChatLoading, setIsChatLoading] = useState(false);
 
+  // using main layout since chat lives in standard sidebar
+
   const chatMutation = trpc.ai.chat.useMutation({
     onSuccess: (response) => {
       const content = response.choices?.[0]?.message?.content;
@@ -43,22 +45,22 @@ export default function Chat() {
 
   return (
     <div className="min-h-screen p-4 bg-background">
-      <h1 className="text-2xl font-bold mb-4">AI Chat</h1>
-      <div className="h-[70vh]">
-        <AIChatBox
-          messages={chatMessages}
-          onSendMessage={handleSend}
-          isLoading={isChatLoading}
-          placeholder="Ask the AI anything..."
-          emptyStateMessage="Start the conversation by typing a message"
-          suggestedPrompts={[
-            "Explain roguescript obfuscation",
-            "How does HWID ban work?",
-            "What features does Roguard have?",
-          ]}
-          height="100%"
-        />
-      </div>
+        <h1 className="text-2xl font-bold mb-4">AI Chat</h1>
+        <div className="h-[70vh]">
+          <AIChatBox
+            messages={chatMessages}
+            onSendMessage={handleSend}
+            isLoading={isChatLoading}
+            placeholder="Ask the AI anything..."
+            emptyStateMessage="Start the conversation by typing a message"
+            suggestedPrompts={[
+              "Explain roguescript obfuscation",
+              "How does HWID ban work?",
+              "What features does Roguard have?",
+            ]}
+            height="100%"
+          />
+        </div>
     </div>
   );
 }

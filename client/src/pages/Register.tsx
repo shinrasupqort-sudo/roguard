@@ -9,30 +9,51 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
 export default function Register() {
-  // registration disabled temporarily, use dashboard button below
   const [, navigate] = useLocation();
+  const { isAuthenticated, loading } = useAuth();
+  const [name, setName] = useState("");
 
-  return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-2">
-          <div className="flex items-center gap-2 mb-4">
-            <Shield className="w-6 h-6 text-primary" />
-            <span className="text-xl font-bold">Roguard</span>
-          </div>
-          <CardTitle>Registration disabled</CardTitle>
-          <CardDescription>
-            Account creation is disabled for now. Use the button below to go straight to the dashboard.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="text-center">
-          <Button onClick={() => navigate("/dashboard")} size="lg">
-            Go to dashboard
-          </Button>
-        </CardContent>
-      </Card>
-    </div>
-  );
+  if (!loading && isAuthenticated) {
+    navigate("/dashboard");
+    return null;
+  }
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
+
+  const utils = trpc.useContext();
+
+  const registerMutation = trpc.auth.register.useMutation({
+    onSuccess: (data) => {
+      utils.auth.me.setData(undefined, data.user as any);
+      toast.success("Account created!");
+      navigate("/dashboard");
+    },
+    onError: (err) => {
+      const msg = err.data?.message ?? err.message;
+      setError(msg);
+      toast.error(msg);
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    if (!email.trim() || !password.trim() || !confirmPassword.trim()) {
+      setError("Please fill in all fields");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
+    registerMutation.mutate({
+      name: name.trim() || undefined,
+      email: email.trim().toLowerCase(),
+      password,
+    });
+  };
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -45,7 +66,7 @@ export default function Register() {
           <CardTitle>Create your account</CardTitle>
           <CardDescription>Sign up to start protecting your scripts</CardDescription>
         </CardHeader>
-        
+
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
