@@ -48,19 +48,24 @@ export async function setupVite(app: Express, server: Server) {
 }
 
 export function serveStatic(app: Express) {
-  // Vite is configured to emit the client build to `<repo root>/dist/public`.
-  // Use that path in production. In development `setupVite` is used instead.
-  const distPath = path.resolve(import.meta.dirname, "../..", "dist", "public");
+  // When the server is bundled with esbuild, import.meta.dirname points to /dist,
+  // so we use process.cwd() which points to the app root in production (Render, etc).
+  const distPath = path.join(process.cwd(), "dist", "public");
+  
   if (!fs.existsSync(distPath)) {
     console.error(
-      `Could not find the build directory: ${distPath}, make sure to build the client first`
+      `Could not find the build directory: ${distPath}. Make sure to run "pnpm build" first.`
     );
   }
 
   app.use(express.static(distPath));
 
-  // fall through to index.html if the file doesn't exist
+  // SPA fallback: serve index.html for any route that doesn't match a static file
   app.use("*", (_req, res) => {
-    res.sendFile(path.resolve(distPath, "index.html"));
+    const indexPath = path.join(distPath, "index.html");
+    if (!fs.existsSync(indexPath)) {
+      return res.status(404).send("index.html not found");
+    }
+    res.sendFile(indexPath);
   });
 }
