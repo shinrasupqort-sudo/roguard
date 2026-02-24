@@ -3,7 +3,7 @@ import { getLoginUrl } from "@/const";
 import { trpc } from "@/lib/trpc";
 import {
   Activity, AlertTriangle, Bell, ChevronRight, Code2, FileCode2,
-  Gauge, Globe, LayoutDashboard, LogOut, Menu, MessageSquare, Settings, Shield,
+  Gauge, Globe, LayoutDashboard, LogOut, Menu, Settings, Shield,
   ShieldBan, X
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -13,7 +13,6 @@ import { Badge } from "./ui/badge";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/chat", label: "Chat", icon: MessageSquare },
   { href: "/scripts", label: "Scripts", icon: FileCode2 },
   { href: "/obfuscator", label: "Obfuscator", icon: Code2 },
   { href: "/remote-loader", label: "Remote Loader", icon: Globe },
