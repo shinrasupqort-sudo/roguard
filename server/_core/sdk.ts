@@ -5,7 +5,6 @@ import type { Request } from "express";
 import { SignJWT, jwtVerify } from "jose";
 import type { User } from "../db";
 import * as db from "../db";
-import { isAdminEmail } from "../adminUsers";
 
 
 const isNonEmptyString = (value: unknown): value is string =>
@@ -110,9 +109,8 @@ class SDKServer {
     }
 
     const passwordHash = await this.hashPassword(password);
-    const isAdmin = isAdminEmail(normalized);
-    const role = isAdmin ? "admin" : "user";
-    const user = await db.createUser(normalized, passwordHash, name, role as any);
+    const role = "user";
+    const user = await db.createUser(normalized, passwordHash, name);
     if (!user) {
       console.warn("[SDK] createUser returned null");
       throw new Error("Failed to create user (database error)");
@@ -152,7 +150,7 @@ class SDKServer {
       .toString(36)
       .substring(7)}@guest.local`;
     const role = "user";
-    const user = await db.createUser(guestEmail, "", `Guest ${Date.now()}`, role);
+    const user = await db.createUser(guestEmail, "", `Guest ${Date.now()}`);
     if (!user) {
       throw new Error("Failed to create guest user (database error)");
     }

@@ -1,12 +1,5 @@
-// simple list of email addresses that should be granted the "admin" role
-// when they register.  This avoids hard‑coding roles in the database and
-// lets you manage the list in a single file.
+// adminUsers.ts is no longer used.  The application has been simplified to
+// only support regular user accounts and guest login.  Admin roles and
+// invite codes were removed per recent requirements.
 
-export const adminEmails = new Set<string>([
-  // add addresses here you want to be able to access /admin
-  // e.g. "admin@example.com",
-]);
-
-export function isAdminEmail(email: string): boolean {
-  return adminEmails.has(email.trim().toLowerCase());
-}
+// (File retained for historical reasons but may be deleted.)

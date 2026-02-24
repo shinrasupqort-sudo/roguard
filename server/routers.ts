@@ -9,25 +9,19 @@ import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { notifyOwner } from "./_core/notification";
 import { invokeLLM } from "./_core/llm";
 import {
-  banUser, createAlert, createExecutorLog, createHwidBan, createRemoteLoader,
+  createAlert, createExecutorLog, createHwidBan, createRemoteLoader,
   createScript, deleteRemoteLoader, deleteScript, getAllExecutorLogs, getAllUsers,
   getDashboardStats, getExecutorLogs, getExecutorLogStats, getHwidBans,
   getRemoteLoaderByKey, getScriptById, getTopScripts, getUnreadAlertCount,
   getUserAlerts, getUserRemoteLoaders, getUserScripts, getUserSettings,
-  isHwidBanned, markAlertRead, markAllAlertsRead, removeHwidBan, unbanUser,
+  isHwidBanned, markAlertRead, markAllAlertsRead, removeHwidBan,
   updateRemoteLoader, updateScriptObfuscated, updateUserSettings,
   incrementRemoteLoaderExecution, incrementScriptExecution,
-  updateUserRole,
-  createInvite, consumeInvite, listInvites,
 } from "./db";
 import { obfuscateLua, validateLuaScript } from "./obfuscator";
 import { storagePut } from "./storage";
 import { realtimeDb } from "./firebase";
 
-const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
-  if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
-  return next({ ctx });
-});
 
 function randomSuffix() { return nanoid(8); }
 
@@ -94,14 +88,6 @@ export const appRouter = router({
         return { success: true, user };
       }),
     
-    // invite validation endpoint
-    consumeInvite: publicProcedure
-      .input(z.string().min(16).max(16))
-      .mutation(async ({ input }) => {
-        const ok = await consumeInvite(input);
-        if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid or used invite" });
-        return { success: true };
-      }),
 
     loginGuest: publicProcedure
       .mutation(async ({ ctx }) => {
@@ -128,48 +114,6 @@ export const appRouter = router({
     }),
   }),
 
-  admin: router({
-    listUsers: adminProcedure.query(async () => {
-      return await getAllUsers();
-    }),
-    banUser: adminProcedure
-      .input(z.object({ id: z.number(), reason: z.string().optional() }))
-      .mutation(async ({ input }) => {
-        await banUser(input.id, input.reason || "");
-        return { success: true };
-      }),
-    unbanUser: adminProcedure
-      .input(z.object({ id: z.number() }))
-      .mutation(async ({ input }) => {
-        await unbanUser(input.id);
-        return { success: true };
-      }),
-    setUserRole: adminProcedure
-      .input(z.object({ id: z.number(), role: z.enum(["user", "admin"]) }))
-      .mutation(async ({ input }) => {
-        await updateUserRole(input.id, input.role);
-        return { success: true };
-      }),
-    getAuthLogs: adminProcedure.query(async () => {
-      const snap = await realtimeDb.ref("authLogs").orderByChild("timestamp").limitToLast(200).once("value");
-      const val = snap.val() || {};
-      return Object.values(val);
-    }),
-    // invite management (only the designated gmail may access)
-    generateInvite: protectedProcedure.mutation(async ({ ctx }) => {
-      if (ctx.user.email !== "francyertj@gmail.com") {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Not allowed" });
-      }
-      const code = await createInvite();
-      return { code };
-    }),
-    listInvites: protectedProcedure.query(async ({ ctx }) => {
-      if (ctx.user.email !== "francyertj@gmail.com") {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Not allowed" });
-      }
-      return await listInvites();
-    }),
-  }),
 
   scripts: router({
     list: protectedProcedure.query(async ({ ctx }) => getUserScripts(ctx.user.id)),
@@ -282,7 +226,6 @@ export const appRouter = router({
     list: protectedProcedure
       .input(z.object({ limit: z.number().optional(), offset: z.number().optional() }))
       .query(async ({ ctx, input }) => {
-        if (ctx.user.role === "admin") return getAllExecutorLogs(input.limit ?? 100, input.offset ?? 0);
         return getExecutorLogs(ctx.user.id, input.limit ?? 100, input.offset ?? 0);
       }),
 

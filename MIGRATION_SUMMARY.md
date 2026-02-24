@@ -7,6 +7,9 @@ Complete overhaul of authentication system from Google OAuth + Manus AI to email
 
 ### 1. Authentication System Overhaul
 
+* Admin role and invite code logic have been removed; new registrations always create regular users and guest login remains.
+
+
 #### Database Schema Changes (`drizzle/schema.ts`)
 - **Removed Fields:**
   - `openId: varchar(128)` (OAuth identifier)

@@ -11,7 +11,7 @@ export type User = {
   avatar?: string | null;
   loginMethod: string;
   hwid?: string | null;
-  role: "user" | "admin";
+  role: "user";
   isBanned: boolean;
   banReason?: string | null;
   createdAt: Date;
@@ -26,7 +26,6 @@ export async function createUser(
   email: string,
   passwordHash: string,
   name?: string,
-  role: "user" | "admin" = "user"
 ): Promise<User | undefined> {
   const norm = email.toLowerCase();
   if (users.find((u) => u.email === norm && u.passwordHash)) {
@@ -40,7 +39,7 @@ export async function createUser(
     avatar: null,
     loginMethod: "email",
     hwid: null,
-    role,
+    role: "user",
     isBanned: false,
     banReason: null,
     createdAt: new Date(),
@@ -98,71 +97,36 @@ export async function unbanUser(userId: number) {
   }
 }
 
-export async function updateUserRole(userId: number, role: "user" | "admin") {
-  const u = await getUserById(userId);
-  if (u) {
-    u.role = role;
-    u.updatedAt = new Date();
-  }
-}
 
-// invite codes (one‑time use)
-export type Invite = { code: string; used: boolean; createdAt: Date };
-const invites: Invite[] = [];
-
-export async function createInvite(): string {
-  // 16 alphanumeric characters
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  let code;
-  do {
-    code = "";
-    for (let i = 0; i < 16; i++) {
-      code += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-  } while (invites.find(i => i.code === code));
-
-  invites.push({ code, used: false, createdAt: new Date() });
-  return code;
-}
-
-export async function consumeInvite(code: string): boolean {
-  const inv = invites.find(i => i.code === code);
-  if (!inv || inv.used) return false;
-  inv.used = true;
-  return true;
-}
-
-export async function listInvites() {
-  return invites;
-}
 
 // stubs for the remaining exports - simply no-ops or empty results
-export async function createAlert() {}
-export async function createExecutorLog() {}
-export async function createHwidBan() {}
-export async function createRemoteLoader() {}
-export async function createScript() {}
-export async function deleteRemoteLoader() {}
-export async function deleteScript() {}
-export async function getAllExecutorLogs() { return []; }
-export async function getDashboardStats() { return {}; }
-export async function getExecutorLogs() { return []; }
-export async function getExecutorLogStats() { return { total: 0, success: 0, errors: 0, blocked: 0, bypass: 0 }; }
-export async function getHwidBans() { return []; }
-export async function getRemoteLoaderByKey() { return null; }
-export async function getScriptById() { return null; }
-export async function getTopScripts() { return []; }
-export async function getUnreadAlertCount() { return 0; }
-export async function getUserAlerts() { return []; }
-export async function getUserRemoteLoaders() { return []; }
-export async function getUserScripts() { return []; }
-export async function getUserSettings() { return null; }
-export async function isHwidBanned() { return false; }
-export async function markAlertRead() {}
-export async function markAllAlertsRead() {}
-export async function removeHwidBan() {}
-export async function updateRemoteLoader() {}
-export async function updateScriptObfuscated() {}
-export async function updateUserSettings() {}
-export async function incrementRemoteLoaderExecution() {}
-export async function incrementScriptExecution() {}
+// these accept any parameters so callers can pass arguments without TS errors
+export async function createAlert(..._args: any[]) {}
+export async function createExecutorLog(..._args: any[]) {}
+export async function createHwidBan(..._args: any[]) {}
+export async function createRemoteLoader(..._args: any[]) {}
+export async function createScript(..._args: any[]) {}
+export async function deleteRemoteLoader(..._args: any[]) {}
+export async function deleteScript(..._args: any[]) {}
+export async function getAllExecutorLogs(..._args: any[]) { return []; }
+export async function getDashboardStats(..._args: any[]) { return {}; }
+export async function getExecutorLogs(..._args: any[]) { return []; }
+export async function getExecutorLogStats(..._args: any[]) { return { total: 0, success: 0, errors: 0, blocked: 0, bypass: 0 }; }
+export async function getHwidBans(..._args: any[]) { return []; }
+export async function getRemoteLoaderByKey(..._args: any[]) { return null; }
+export async function getScriptById(..._args: any[]) { return null; }
+export async function getTopScripts(..._args: any[]) { return []; }
+export async function getUnreadAlertCount(..._args: any[]) { return 0; }
+export async function getUserAlerts(..._args: any[]) { return []; }
+export async function getUserRemoteLoaders(..._args: any[]) { return []; }
+export async function getUserScripts(..._args: any[]) { return []; }
+export async function getUserSettings(..._args: any[]) { return null; }
+export async function isHwidBanned(..._args: any[]) { return false; }
+export async function markAlertRead(..._args: any[]) {}
+export async function markAllAlertsRead(..._args: any[]) {}
+export async function removeHwidBan(..._args: any[]) {}
+export async function updateRemoteLoader(..._args: any[]) {}
+export async function updateScriptObfuscated(..._args: any[]) {}
+export async function updateUserSettings(..._args: any[]) {}
+export async function incrementRemoteLoaderExecution(..._args: any[]) {}
+export async function incrementScriptExecution(..._args: any[]) {}

@@ -339,12 +339,6 @@ Current test status: **14 tests passing**
 ```bash
 # Verify DATABASE_URL format:
 
-### Admin Panel
-An administration console is available at `/admin`.  No navigation link is
-shown — you must type the path directly.  Only accounts whose `role` is
-`admin` may access it.  New registrations will automatically receive the
-`admin` role if the email address is listed in
-`server/adminUsers.ts` (see that file for details).
 
 mysql://user:password@host:port/database
 

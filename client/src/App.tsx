@@ -15,7 +15,6 @@ import Scripts from "./pages/Scripts";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import GuestLogin from "./pages/GuestLogin";
-import Admin from "./pages/Admin";
 import Chat from "./pages/Chat";
 
 function Router() {
@@ -32,7 +31,6 @@ function Router() {
       <Route path="/auth/login" component={Login} />
       <Route path="/auth/register" component={Register} />
       <Route path="/auth/guest" component={GuestLogin} />
-      <Route path="/admin" component={Admin} />
       <Route path="/chat" component={Chat} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
