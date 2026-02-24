@@ -22,6 +22,8 @@ const navItems = [
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
+  // authentication gate is currently disabled; set SKIP_AUTH to false
+  const SKIP_AUTH = true;
   const { user, loading, isAuthenticated, logout } = useAuth();
   const [location] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -50,7 +52,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!isAuthenticated) {
+  // when authentication is disabled we skip the gate entirely
+  if (!SKIP_AUTH && !isAuthenticated) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center bg-grid">
         <div className="text-center space-y-6 p-8">

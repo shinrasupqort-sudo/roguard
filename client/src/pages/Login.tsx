@@ -22,7 +22,7 @@ export default function Login() {
           </div>
           <CardTitle>Login disabled</CardTitle>
           <CardDescription>
-            Authentication has been temporarily removed. Click below to continue.
+            Authentication is disabled for now. Use the button below to go straight to the dashboard.
           </CardDescription>
         </CardHeader>
         <CardContent className="text-center">

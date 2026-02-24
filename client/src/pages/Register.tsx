@@ -22,7 +22,7 @@ export default function Register() {
           </div>
           <CardTitle>Registration disabled</CardTitle>
           <CardDescription>
-            Account creation has been temporarily removed. Click below to continue.
+            Account creation is disabled for now. Use the button below to go straight to the dashboard.
           </CardDescription>
         </CardHeader>
         <CardContent className="text-center">
